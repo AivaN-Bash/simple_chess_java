@@ -1,32 +1,32 @@
 # Simple Chess
 
-Simple Chess is split into two independent apps that share the same visual style:
+Simple Chess has two separate versions that share the same look:
 
-- `main/` is the Java Swing desktop game.
-- `web/` is the React browser game and deployment project.
+- **Desktop app:** a Java program for Windows.
+- **Web app:** a React game that runs in a browser.
 
-Each version runs its own local chess game. The desktop app's **Open web version** button launches the browser version; it does not transfer or synchronize a match between the two apps.
+The two versions are separate games. A match started in one version does not appear in the other.
 
-## Java desktop app
+## Play the desktop app
 
-From the repository folder, compile and start the desktop app:
+You need a Java Development Kit (JDK) installed. It includes both the compiler that builds the app and Java that runs it. A Java runtime by itself is not enough.
 
-```powershell
-javac -d out main\ChessGame.java main\ChessBot.java main\ChessBoardPanel.java main\main.java
-java -cp out Main
-```
+1. Open the project folder.
+2. Double-click `run.bat`.
 
-The **Open web version** button opens the live web app by default: https://aivan-bash.github.io/simple_chess_java/. To open a local development server instead, set the URL when launching Java:
+You can also open PowerShell in the project folder and run:
 
 ```powershell
-java -DsimpleChess.webUrl=https://your-site.vercel.app -cp out Main
+.\run.bat
 ```
 
-You can also set `SIMPLE_CHESS_WEB_URL` in the environment. The JVM property takes precedence if both are set.
+The launcher compiles the Java files and opens the game for you. It creates the `out` folder automatically. If you change the code, run `run.bat` again to rebuild and start the latest version.
 
-## React web app
+## Play the web app
 
-The browser app is a separate Vite project under `web/`. It uses React and keeps the established charcoal, green, ivory, and brass interface.
+The live web game is at [aivan-bash.github.io/simple_chess_java](https://aivan-bash.github.io/simple_chess_java/).
+
+To run the web app on your computer, install [Node.js](https://nodejs.org/) and enter these commands in PowerShell:
 
 ```powershell
 cd web
@@ -34,28 +34,41 @@ npm.cmd install
 npm.cmd run dev
 ```
 
-Vite prints the local address after the dev server starts. The desktop button uses port `5173` by default.
+Open the local address printed by Vite, usually `http://localhost:5173`.
 
-Create a production build with:
+The Java app's **Open web version** button opens the live game. To make it open a different site, set `SIMPLE_CHESS_WEB_URL` or use this JVM option when starting Java:
 
 ```powershell
-npm.cmd run build
+java -DsimpleChess.webUrl=https://your-site.example -cp out Main
 ```
 
-The optimized static site is written to `web/dist/`.
+The JVM option takes priority if both settings are present.
 
-## Deploy the web app
+## What you can do
 
-### GitHub Pages
+- Play a local two-player match or play against the computer.
+- See legal moves, checks, checkmate, stalemate, captured pieces, and material advantage.
+- Use castling, en passant, and pawn promotion.
+- In a local match, the board turns toward the player whose turn it is. Use **Flip board** on the web to choose a fixed view.
+- On the web, drag pieces or select a piece and click a highlighted square.
 
-The workflow in `.github/workflows/deploy-web.yml` builds and publishes the web app when changes are pushed to `main`. In the GitHub repository, open **Settings → Pages** and choose **GitHub Actions** as the build and deployment source. After the workflow completes, GitHub shows the live URL in its Pages settings and in the workflow deployment environment.
+## Where things live
 
-### Vercel
+| Folder or file | What it does |
+| --- | --- |
+| `run.bat` | Builds and starts the Java desktop app on Windows. |
+| `main/Main.java` | Opens the desktop app window. |
+| `main/ChessGame.java` | Holds the chess board and enforces the rules. |
+| `main/ChessBot.java` | Chooses moves for the desktop computer opponent. |
+| `main/ChessBoardPanel.java` | Draws and controls the desktop game. |
+| `web/src/App.jsx` | Displays and controls the browser game. |
+| `web/src/chess.js` | Holds the browser game's rules and computer move logic. |
+| `web/src/PieceIcon.jsx` | Draws matching chess pieces at any screen size. |
+| `web/src/bot.worker.js` | Runs browser computer thinking away from the page controls. |
+| `web/styles.css` | Sets the browser game's colors, layout, and appearance. |
 
-Import this repository in Vercel and set the project root to `web`. Vercel detects Vite; use `npm run build` as the build command and `dist` as the output directory.
+## Publish the web app
 
-To override the default live URL, pass `-DsimpleChess.webUrl=https://your-live-site` when launching the desktop app. For local development, use `-DsimpleChess.webUrl=http://localhost:5173`.
+Changes to files in `web/` are built and published to GitHub Pages when pushed to `main`. The project's Pages source should be set to **GitHub Actions** in the repository's **Settings > Pages** page.
 
-## Gameplay
-
-Both apps support local two-player and computer matches, legal move highlights, check, checkmate, stalemate, castling, en passant, pawn promotion, and captured-piece trays with material advantage. Local two-player games rotate the board to face the player whose turn it is. In the browser version, drag a piece to a legal square or select it and click a highlighted square. To castle, drag the king to the rook, or click the rook after selecting the king. The browser computer chooses moves off the main UI thread so its search does not freeze the board.
+To publish with Vercel instead, import the repository and set the project root to `web`, the build command to `npm run build`, and the output folder to `dist`.
