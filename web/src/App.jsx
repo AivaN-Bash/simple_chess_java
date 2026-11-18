@@ -224,13 +224,13 @@ export default function App() {
     if (origin) movePieceTo(origin, row, col);
   }
 
-  const blackAtBottom = isBotGame && humanColor === "b";
+  const boardFlipped = isBotGame ? humanColor === "b" : game.turn === "b";
   const squares = [];
   const moveTargets = new Set(selectedMoves.map(move => `${move.tr},${move.tc}`));
   for (let displayRow = 0; displayRow < 8; displayRow++) {
     for (let displayCol = 0; displayCol < 8; displayCol++) {
-      const row = blackAtBottom ? 7 - displayRow : displayRow;
-      const col = blackAtBottom ? 7 - displayCol : displayCol;
+      const row = boardFlipped ? 7 - displayRow : displayRow;
+      const col = boardFlipped ? 7 - displayCol : displayCol;
       const piece = game.pieceAt(row, col);
       const isSelected = selected?.row === row && selected?.col === col;
       const destination = moveTargets.has(`${row},${col}`);
@@ -367,7 +367,7 @@ export default function App() {
         </aside>
       </section>
 
-      <footer>Made for two players at one board — or you and the computer.</footer>
+      <footer>Local games rotate the board to face the player whose turn it is.</footer>
 
       {pendingPromotion && <div className="promotion-backdrop">
         <section className="promotion-dialog" role="dialog" aria-modal="true" aria-labelledby="promotion-title">

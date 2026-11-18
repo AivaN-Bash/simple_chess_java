@@ -320,7 +320,7 @@ public final class ChessBoardPanel extends JPanel {
         side.add(howTo);
         side.add(Box.createVerticalStrut(9));
         instructions.setText("<html><div style='width:205px; line-height:1.55'>"
-                + "Select a piece and choose a highlighted square. To castle, select your king, then click the rook."
+                + "The board rotates to face the player whose turn it is. Select a piece and choose a highlighted square. To castle, select your king, then click the rook."
                 + "</div></html>");
         instructions.setFont(FONT_BODY);
         instructions.setForeground(MUTED);
@@ -402,6 +402,12 @@ public final class ChessBoardPanel extends JPanel {
 
     private boolean isHumanTurn() {
         return !isBotGame() || game.currentTurn() != botColor();
+    }
+
+    private boolean isBoardFlipped() {
+        return isBotGame()
+                ? botColor() == ChessGame.Color.WHITE
+                : game.currentTurn() == ChessGame.Color.BLACK;
     }
 
     private void startNewGame() {
@@ -731,7 +737,7 @@ public final class ChessBoardPanel extends JPanel {
         selectedMoves = new ArrayList<>();
         for (boolean[] row : legalDestinations) Arrays.fill(row, false);
         instructions.setText("<html><div style='width:205px; line-height:1.55'>"
-                + "Select a piece and choose a highlighted square. To castle, select your king, then click the rook."
+                + "The board rotates to face the player whose turn it is. Select a piece and choose a highlighted square. To castle, select your king, then click the rook."
                 + "</div></html>");
     }
 
@@ -930,13 +936,19 @@ public final class ChessBoardPanel extends JPanel {
             updateBoardGeometry();
             if (squareSize <= 0 || point.x < boardX || point.y < boardY
                     || point.x >= boardX + boardSize || point.y >= boardY + boardSize) return null;
-            return new int[]{(point.y - boardY) / squareSize, (point.x - boardX) / squareSize};
+            int displayRow = (point.y - boardY) / squareSize;
+            int displayCol = (point.x - boardX) / squareSize;
+            return isBoardFlipped()
+                    ? new int[]{7 - displayRow, 7 - displayCol}
+                    : new int[]{displayRow, displayCol};
         }
 
         Point squareCenter(int row, int col) {
             updateBoardGeometry();
-            return new Point(boardX + col * squareSize + squareSize / 2,
-                    boardY + row * squareSize + squareSize / 2);
+            int displayRow = isBoardFlipped() ? 7 - row : row;
+            int displayCol = isBoardFlipped() ? 7 - col : col;
+            return new Point(boardX + displayCol * squareSize + squareSize / 2,
+                    boardY + displayRow * squareSize + squareSize / 2);
         }
 
         private void updateBoardGeometry() {
@@ -959,10 +971,13 @@ public final class ChessBoardPanel extends JPanel {
             g.fillRoundRect(boardX - 5, boardY - 5, boardSize + 10, boardSize + 10, 12, 12);
 
             ChessGame.Move last = game.lastMove();
+            boolean flipped = isBoardFlipped();
             for (int row = 0; row < 8; row++) {
                 for (int col = 0; col < 8; col++) {
-                    int x = boardX + col * squareSize;
-                    int y = boardY + row * squareSize;
+                    int displayRow = flipped ? 7 - row : row;
+                    int displayCol = flipped ? 7 - col : col;
+                    int x = boardX + displayCol * squareSize;
+                    int y = boardY + displayRow * squareSize;
                     boolean light = (row + col) % 2 == 0;
                     g.setColor(light ? SQUARE_LIGHT : SQUARE_DARK);
                     g.fillRect(x, y, squareSize, squareSize);
@@ -983,8 +998,8 @@ public final class ChessBoardPanel extends JPanel {
                     if (piece != null && !movingPiece && !draggedOrigin) {
                         drawPiece(g, piece, x + squareSize / 2, y + squareSize / 2, squareSize);
                     }
-                    if (row == 7) drawCoordinate(g, (char) ('a' + col) + "", x, boardY + boardSize);
-                    if (col == 0) drawRank(g, "" + (8 - row), boardX - GUTTER, y);
+                    if (displayRow == 7) drawCoordinate(g, (char) ('a' + col) + "", x, boardY + boardSize);
+                    if (displayCol == 0) drawRank(g, "" + (8 - row), boardX - GUTTER, y);
                 }
             }
             if (currentTurnInCheck) {
@@ -992,8 +1007,11 @@ public final class ChessBoardPanel extends JPanel {
                     for (int col = 0; col < 8; col++) {
                         ChessGame.Piece piece = game.pieceAt(row, col);
                         if (piece != null && piece.type == ChessGame.Type.KING && piece.color == game.currentTurn()) {
+                            int displayRow = flipped ? 7 - row : row;
+                            int displayCol = flipped ? 7 - col : col;
                             g.setColor(CHECK_OVERLAY);
-                            g.fillRect(boardX + col * squareSize, boardY + row * squareSize, squareSize, squareSize);
+                            g.fillRect(boardX + displayCol * squareSize, boardY + displayRow * squareSize,
+                                    squareSize, squareSize);
                         }
                     }
                 }
@@ -1012,8 +1030,10 @@ public final class ChessBoardPanel extends JPanel {
         }
 
         private void drawMoveHint(Graphics2D g, int row, int col) {
-            int x = boardX + col * squareSize;
-            int y = boardY + row * squareSize;
+            int displayRow = isBoardFlipped() ? 7 - row : row;
+            int displayCol = isBoardFlipped() ? 7 - col : col;
+            int x = boardX + displayCol * squareSize;
+            int y = boardY + displayRow * squareSize;
             ChessGame.Piece target = game.pieceAt(row, col);
             ChessGame.Piece selectedPiece = selectedRow < 0 ? null : game.pieceAt(selectedRow, selectedCol);
             boolean enPassant = selectedPiece != null && selectedPiece.type == ChessGame.Type.PAWN
