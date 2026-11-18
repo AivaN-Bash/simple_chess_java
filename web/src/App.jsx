@@ -1,9 +1,9 @@
-import { useRef, useState } from "react";
-import { ChessGame, chooseBotMove, PIECE_NAMES, PIECE_SYMBOLS } from "./chess.js";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChessGame, PIECE_NAMES, PIECE_SYMBOLS } from "./chess.js";
 
 function moveHint(game, selected, selectedMoves) {
   if (!selected) {
-    return "Select a piece and choose a highlighted square. To castle, select your king, then click the rook.";
+    return "Drag a piece, or select it and choose a highlighted square. To castle, move your king to the rook.";
   }
 
   const piece = game.pieceAt(selected.row, selected.col);
@@ -34,12 +34,15 @@ export default function App() {
   const [pendingPromotion, setPendingPromotion] = useState(null);
   const versionRef = useRef(0);
   const timerRef = useRef(null);
+  const botWorkerRef = useRef(null);
+  const dragOriginRef = useRef(null);
 
   const botColor = humanColor === "w" ? "b" : "w";
   const isBotGame = opponent === "bot";
-  const legalMoves = game.legalMoves();
-  const checked = game.inCheck(game.turn);
-  const terminal = legalMoves.length === 0;
+  const { checked, terminal } = useMemo(() => {
+    const legalMoves = game.legalMoves();
+    return { checked: game.inCheck(game.turn), terminal: legalMoves.length === 0 };
+  }, [game]);
   const activePlayer = game.turn === "w" ? "white" : "black";
   const status = terminal
     ? checked ? `Checkmate — ${game.turn === "w" ? "Black" : "White"} wins` : "Stalemate — draw"
@@ -57,6 +60,37 @@ export default function App() {
     setSelectedMoves([]);
   }
 
+  function ensureBotWorker() {
+    if (botWorkerRef.current) return botWorkerRef.current;
+
+    const worker = new Worker(new URL("./bot.worker.js", import.meta.url), { type: "module" });
+    worker.onmessage = event => {
+      const { move, version } = event.data;
+      if (version !== versionRef.current) return;
+
+      const nextGame = gameRef.current.copy();
+      if (move && nextGame.move(move, "q")) replaceGame(nextGame);
+      timerRef.current = null;
+      setBotThinking(false);
+      clearSelection();
+    };
+    worker.onerror = () => {
+      worker.terminate();
+      botWorkerRef.current = null;
+      timerRef.current = null;
+      setBotThinking(false);
+    };
+    botWorkerRef.current = worker;
+    return worker;
+  }
+
+  useEffect(() => () => {
+    versionRef.current += 1;
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    botWorkerRef.current?.terminate();
+    botWorkerRef.current = null;
+  }, []);
+
   function scheduleBotMove(position, version, opponentMode = opponent, playerColor = humanColor,
       botStyle = difficulty) {
     const computerColor = playerColor === "w" ? "b" : "w";
@@ -64,20 +98,26 @@ export default function App() {
     setBotThinking(true);
     timerRef.current = window.setTimeout(() => {
       if (version !== versionRef.current) return;
-      const move = chooseBotMove(position.copy(), botStyle === "thoughtful");
-      const current = gameRef.current;
-      const nextGame = current.copy();
-      if (move && nextGame.turn === computerColor && nextGame.move(move, "q")) replaceGame(nextGame);
-      timerRef.current = null;
-      setBotThinking(false);
-      clearSelection();
+      ensureBotWorker().postMessage({
+        version,
+        thoughtful: botStyle === "thoughtful",
+        position: {
+          board: position.board,
+          turn: position.turn,
+          enPassant: position.enPassant,
+          lastMove: position.lastMove
+        }
+      });
     }, 120);
   }
 
   function resetGame(settings = {}) {
     versionRef.current += 1;
     if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    botWorkerRef.current?.terminate();
+    botWorkerRef.current = null;
     timerRef.current = null;
+    dragOriginRef.current = null;
     setBotThinking(false);
     setPendingPromotion(null);
     clearSelection();
@@ -97,31 +137,33 @@ export default function App() {
     scheduleBotMove(nextGame.copy(), versionRef.current);
   }
 
+  function movePieceTo(from, row, col) {
+    const current = gameRef.current;
+    const movingPiece = current.pieceAt(from.row, from.col);
+    if (!movingPiece || movingPiece.color !== current.turn) return false;
+
+    const targetPiece = current.pieceAt(row, col);
+    const moves = current.legalMovesFrom(from.row, from.col);
+    const destination = movingPiece.type === "k" && targetPiece?.type === "r"
+      && targetPiece.color === movingPiece.color && row === from.row
+      ? moves.find(move => Math.abs(move.tc - from.col) === 2 && col === (move.tc > from.col ? 7 : 0))
+      : moves.find(move => move.tr === row && move.tc === col);
+    if (!destination) return false;
+
+    if (movingPiece.type === "p" && (destination.tr === 0 || destination.tr === 7)) {
+      setPendingPromotion(destination);
+    } else {
+      finishMove(destination);
+    }
+    return true;
+  }
+
   function handleSquare(row, col) {
     const current = gameRef.current;
     if (botThinking || (isBotGame && current.turn === botColor)) return;
 
     if (selected) {
-      const king = current.pieceAt(selected.row, selected.col);
-      const clickedPiece = current.pieceAt(row, col);
-      if (king?.type === "k" && clickedPiece?.type === "r" && clickedPiece.color === king.color
-          && row === selected.row) {
-        const castle = selectedMoves.find(move => Math.abs(move.tc - selected.col) === 2
-          && col === (move.tc > selected.col ? 7 : 0));
-        if (castle) {
-          finishMove(castle);
-          return;
-        }
-      }
-
-      const destination = selectedMoves.find(move => move.tr === row && move.tc === col);
-      if (destination) {
-        const movingPiece = current.pieceAt(selected.row, selected.col);
-        if (movingPiece.type === "p" && (row === 0 || row === 7)) {
-          setPendingPromotion(destination);
-        } else finishMove(destination);
-        return;
-      }
+      if (movePieceTo(selected, row, col)) return;
     }
 
     const piece = current.pieceAt(row, col);
@@ -131,18 +173,41 @@ export default function App() {
     } else clearSelection();
   }
 
+  function handleDragStart(event, row, col, piece) {
+    if (!piece || piece.color !== gameRef.current.turn || botThinking
+        || (isBotGame && gameRef.current.turn === botColor)) {
+      event.preventDefault();
+      return;
+    }
+    dragOriginRef.current = { row, col };
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", `${row},${col}`);
+    setSelected({ row, col });
+    setSelectedMoves(gameRef.current.legalMovesFrom(row, col));
+  }
+
+  function handleDrop(event, row, col) {
+    event.preventDefault();
+    const origin = dragOriginRef.current;
+    dragOriginRef.current = null;
+    if (origin) movePieceTo(origin, row, col);
+  }
+
   const blackAtBottom = isBotGame && humanColor === "b";
   const squares = [];
+  const moveTargets = new Set(selectedMoves.map(move => `${move.tr},${move.tc}`));
   for (let displayRow = 0; displayRow < 8; displayRow++) {
     for (let displayCol = 0; displayCol < 8; displayCol++) {
       const row = blackAtBottom ? 7 - displayRow : displayRow;
       const col = blackAtBottom ? 7 - displayCol : displayCol;
       const piece = game.pieceAt(row, col);
       const isSelected = selected?.row === row && selected?.col === col;
-      const destination = selectedMoves.some(move => move.tr === row && move.tc === col);
+      const destination = moveTargets.has(`${row},${col}`);
       const movingPiece = selected ? game.pieceAt(selected.row, selected.col) : null;
       const enPassant = destination && movingPiece?.type === "p" && selected.col !== col && !piece;
       const castle = destination && movingPiece?.type === "k" && Math.abs(selected.col - col) === 2;
+      const canDrag = piece?.color === game.turn && !botThinking
+        && !(isBotGame && game.turn === botColor);
       const isLastMove = game.lastMove && ((row === game.lastMove.fr && col === game.lastMove.fc)
         || (row === game.lastMove.tr && col === game.lastMove.tc));
       const classes = ["square", (row + col) % 2 === 0 ? "light" : "dark"];
@@ -155,10 +220,15 @@ export default function App() {
           className={classes.join(" ")}
           key={`${row}-${col}`}
           onClick={() => handleSquare(row, col)}
+          onDragStart={event => handleDragStart(event, row, col, piece)}
+          onDragEnd={() => { dragOriginRef.current = null; }}
+          onDragOver={event => event.preventDefault()}
+          onDrop={event => handleDrop(event, row, col)}
+          draggable={Boolean(canDrag)}
           role="gridcell"
           type="button"
         >
-          {destination && <span className={piece || enPassant ? "capture-ring" : castle ? "castle-ring" : "move-dot"} />}
+          {moveTargets.has(`${row},${col}`) && <span className={piece || enPassant ? "capture-ring" : castle ? "castle-ring" : "move-dot"} />}
           {piece && <span className={`piece ${piece.color === "w" ? "white" : "black"}`}>
             {PIECE_SYMBOLS[piece.color + piece.type]}
           </span>}

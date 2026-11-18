@@ -265,9 +265,23 @@ export function sameMove(first, second) {
 export function chooseBotMove(position, thoughtful) {
   const moves = position.legalMoves();
   if (!moves.length) return null;
-  if (!thoughtful) return moves[Math.floor(Math.random() * moves.length)];
-
   const botColor = position.turn;
+
+  if (!thoughtful) {
+    const rankedMoves = moves.map(move => {
+      const next = position.copy();
+      next.apply(move, "q");
+      const replies = next.legalMoves();
+      const score = !replies.length && next.inCheck(next.turn)
+        ? 100_000
+        : evaluate(next, botColor);
+      return { move, score: score + Math.random() * 12 };
+    });
+    const bestScore = Math.max(...rankedMoves.map(candidate => candidate.score));
+    const bestMoves = rankedMoves.filter(candidate => candidate.score >= bestScore - 12);
+    return bestMoves[Math.floor(Math.random() * bestMoves.length)].move;
+  }
+
   let bestScore = -Infinity;
   let bestMoves = [];
   for (const move of moves) {
@@ -278,6 +292,8 @@ export function chooseBotMove(position, thoughtful) {
       ? Math.min(...replies.map(reply => {
         const afterReply = next.copy();
         afterReply.apply(reply, "q");
+        const botReplies = afterReply.legalMoves();
+        if (!botReplies.length) return afterReply.inCheck(botColor) ? -100_000 : 0;
         return evaluate(afterReply, botColor);
       }))
       : next.inCheck(next.turn) ? 100000 : 0;

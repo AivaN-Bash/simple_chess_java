@@ -322,15 +322,17 @@ public final class ChessBoardPanel extends JPanel {
 
         side.add(Box.createVerticalGlue());
         JButton newGame = new ThemedButton("New game");
-        styleButton(newGame, true);
+        styleButton(newGame, false);
         newGame.setAlignmentX(LEFT_ALIGNMENT);
         newGame.addActionListener(event -> startNewGame());
-        side.add(newGame);
-        side.add(Box.createVerticalStrut(9));
-        styleButton(webButton, false);
+        webButton.setText("Open web version   \u2197");
+        styleButton(webButton, true);
+        webButton.setToolTipText("Open Simple Chess in your browser");
         webButton.setAlignmentX(LEFT_ALIGNMENT);
         webButton.addActionListener(event -> openWebVersion());
         side.add(webButton);
+        side.add(Box.createVerticalStrut(9));
+        side.add(newGame);
         side.add(Box.createVerticalStrut(9));
         styleButton(motionButton, false);
         motionButton.setAlignmentX(LEFT_ALIGNMENT);
@@ -435,7 +437,7 @@ public final class ChessBoardPanel extends JPanel {
         button.setFocusPainted(false);
         button.setBorder(BorderFactory.createEmptyBorder(10, 14, 10, 14));
         button.setRolloverEnabled(true);
-        button.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
+        button.setMaximumSize(new Dimension(Integer.MAX_VALUE, primary ? 48 : 42));
         button.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
     }
 

@@ -74,6 +74,8 @@ h1 span { color: var(--accent); }
   -webkit-tap-highlight-color: transparent;
   transition: filter 120ms ease;
 }
+.square[draggable="true"] { cursor: grab; }
+.square[draggable="true"]:active { cursor: grabbing; }
 .square.light { background: var(--light-square); }
 .square.dark { background: var(--dark-square); }
 .square.last-move::before, .square.selected::before {
