@@ -271,6 +271,13 @@ public final class ChessBoardPanel extends JPanel {
         side.add(Box.createVerticalStrut(5));
         side.add(gameLabel);
         side.add(Box.createVerticalStrut(13));
+        JButton newGame = new ThemedButton("New game");
+        styleButton(newGame, true);
+        newGame.setAlignmentX(LEFT_ALIGNMENT);
+        newGame.setToolTipText("Start a fresh chess game");
+        newGame.addActionListener(event -> startNewGame());
+        side.add(newGame);
+        side.add(Box.createVerticalStrut(14));
         addChoice(side, "OPPONENT", opponentChoice);
         side.add(Box.createVerticalStrut(10));
         addChoice(side, "YOUR COLOR", colorChoice);
@@ -321,18 +328,12 @@ public final class ChessBoardPanel extends JPanel {
         side.add(instructions);
 
         side.add(Box.createVerticalGlue());
-        JButton newGame = new ThemedButton("New game");
-        styleButton(newGame, false);
-        newGame.setAlignmentX(LEFT_ALIGNMENT);
-        newGame.addActionListener(event -> startNewGame());
         webButton.setText("Open web version   \u2197");
-        styleButton(webButton, true);
+        styleButton(webButton, false);
         webButton.setToolTipText("Open Simple Chess in your browser");
         webButton.setAlignmentX(LEFT_ALIGNMENT);
         webButton.addActionListener(event -> openWebVersion());
         side.add(webButton);
-        side.add(Box.createVerticalStrut(9));
-        side.add(newGame);
         side.add(Box.createVerticalStrut(9));
         styleButton(motionButton, false);
         motionButton.setAlignmentX(LEFT_ALIGNMENT);
@@ -424,7 +425,7 @@ public final class ChessBoardPanel extends JPanel {
         card.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(SURFACE, 1), BorderFactory.createEmptyBorder(7, 13, 7, 10)));
         card.setAlignmentX(LEFT_ALIGNMENT);
-        card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 72));
+        card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 82));
     }
 
     private void styleButton(JButton button, boolean primary) {
@@ -762,9 +763,9 @@ public final class ChessBoardPanel extends JPanel {
         boolean hasLegalMoves = game.hasLegalMoves();
         boolean terminal = !hasLegalMoves;
         whiteCard.setText(playerCardText("\u2654", "WHITE", isBotGame()
-                ? (botColor() == ChessGame.Color.WHITE ? "Computer" : "You") : "Player one"));
+                ? (botColor() == ChessGame.Color.WHITE ? "Computer" : "You") : "Player one", ChessGame.Color.WHITE));
         blackCard.setText(playerCardText("\u265A", "BLACK", isBotGame()
-                ? (botColor() == ChessGame.Color.BLACK ? "Computer" : "You") : "Player two"));
+                ? (botColor() == ChessGame.Color.BLACK ? "Computer" : "You") : "Player two", ChessGame.Color.BLACK));
         whiteCard.setBackground(!terminal && turn == ChessGame.Color.WHITE ? SURFACE_ACTIVE : SURFACE);
         blackCard.setBackground(!terminal && turn == ChessGame.Color.BLACK ? SURFACE_ACTIVE : SURFACE);
         whiteCard.setBorder(BorderFactory.createCompoundBorder(
@@ -794,11 +795,38 @@ public final class ChessBoardPanel extends JPanel {
         board.repaint();
     }
 
-    private String playerCardText(String icon, String name, String player) {
-        return "<html><div style='padding:2px 0;font-family:Segoe UI,Arial,sans-serif'><span style='font-size:27px;color:#d6b168'>"
-                + icon + "</span>&nbsp;&nbsp;<b style='font-size:12px;letter-spacing:1px'>" + name
-                + "</b><br><span style='color:#9ca79d;font-size:11px'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
-                + player + "</span></div></html>";
+    private String playerCardText(String icon, String name, String player, ChessGame.Color color) {
+        StringBuilder capturedPieces = new StringBuilder();
+        for (ChessGame.Type type : game.capturedBy(color)) {
+            capturedPieces.append(pieceSymbol(type, color.opposite()));
+        }
+        if (capturedPieces.length() == 0) capturedPieces.append("\u2014");
+
+        int advantage = materialValue(color) - materialValue(color.opposite());
+        String score = advantage > 0
+                ? "<b style='color:#d6b168;font-size:11px'>+" + advantage + "</b>"
+                : "";
+        return "<html><table width='205' cellpadding='0' cellspacing='0'><tr>"
+                + "<td rowspan='2' width='34'><span style='font-size:27px;color:#d6b168'>" + icon + "</span></td>"
+                + "<td><b style='font-size:12px;letter-spacing:1px'>" + name + "</b></td>"
+                + "<td rowspan='2' align='right'><span style='font-size:17px'>" + capturedPieces + "</span><br/>"
+                + score + "</td></tr><tr><td><span style='color:#9ca79d;font-size:11px'>" + player
+                + "</span></td></tr></table></html>";
+    }
+
+    private int materialValue(ChessGame.Color color) {
+        int value = 0;
+        for (ChessGame.Type type : game.capturedBy(color)) {
+            switch (type) {
+                case QUEEN: value += 9; break;
+                case ROOK: value += 5; break;
+                case BISHOP:
+                case KNIGHT: value += 3; break;
+                case PAWN: value += 1; break;
+                default: break;
+            }
+        }
+        return value;
     }
 
     private final class BoardCanvas extends JPanel {
@@ -1043,13 +1071,17 @@ public final class ChessBoardPanel extends JPanel {
     }
 
     private String pieceSymbol(ChessGame.Piece piece) {
-        switch (piece.type) {
-            case KING: return piece.color == ChessGame.Color.WHITE ? "\u2654" : "\u265A";
-            case QUEEN: return piece.color == ChessGame.Color.WHITE ? "\u2655" : "\u265B";
-            case ROOK: return piece.color == ChessGame.Color.WHITE ? "\u2656" : "\u265C";
-            case BISHOP: return piece.color == ChessGame.Color.WHITE ? "\u2657" : "\u265D";
-            case KNIGHT: return piece.color == ChessGame.Color.WHITE ? "\u2658" : "\u265E";
-            case PAWN: return piece.color == ChessGame.Color.WHITE ? "\u2659" : "\u265F";
+        return pieceSymbol(piece.type, piece.color);
+    }
+
+    private String pieceSymbol(ChessGame.Type type, ChessGame.Color color) {
+        switch (type) {
+            case KING: return color == ChessGame.Color.WHITE ? "\u2654" : "\u265A";
+            case QUEEN: return color == ChessGame.Color.WHITE ? "\u2655" : "\u265B";
+            case ROOK: return color == ChessGame.Color.WHITE ? "\u2656" : "\u265C";
+            case BISHOP: return color == ChessGame.Color.WHITE ? "\u2657" : "\u265D";
+            case KNIGHT: return color == ChessGame.Color.WHITE ? "\u2658" : "\u265E";
+            case PAWN: return color == ChessGame.Color.WHITE ? "\u2659" : "\u265F";
             default: return "";
         }
     }

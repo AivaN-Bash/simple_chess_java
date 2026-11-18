@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChessGame, PIECE_NAMES, PIECE_SYMBOLS } from "./chess.js";
+import { captureSummary, ChessGame, PIECE_NAMES, PIECE_SYMBOLS } from "./chess.js";
 
 function moveHint(game, selected, selectedMoves) {
   if (!selected) {
@@ -20,6 +20,37 @@ function moveHint(game, selected, selectedMoves) {
 function squareLabel(row, col, piece) {
   const pieceName = piece ? `${piece.color === "w" ? "White" : "Black"} ${PIECE_NAMES[piece.type]}, ` : "Empty ";
   return `${pieceName}${String.fromCharCode(97 + col)}${8 - row}`;
+}
+
+function PlayerCard({ color, active, terminal, name, game }) {
+  const captures = captureSummary(game, color);
+  const label = color === "w" ? "WHITE" : "BLACK";
+
+  return (
+    <div className={`player-card ${active && !terminal ? "active" : ""}`}>
+      <span className="player-icon" aria-hidden="true">
+        {color === "w" ? PIECE_SYMBOLS.wk : PIECE_SYMBOLS.bk}
+      </span>
+      <span className="player-info">
+        <span className="player-heading"><strong>{label}</strong><small>{name}</small></span>
+        <span className="capture-tray" aria-label={`${name} captured pieces`} role="group">
+          {captures.pieces.length
+            ? captures.pieces.map((piece, index) => (
+              <span
+                aria-hidden="true"
+                className={`captured-piece ${color === "w" ? "captured-black" : "captured-white"}`}
+                key={`${piece}-${index}`}
+              >
+                {piece}
+              </span>
+            ))
+            : <span className="capture-empty">Captured pieces</span>}
+          {captures.advantage > 0 && <strong className="material-advantage">+{captures.advantage}</strong>}
+        </span>
+      </span>
+      <span className="turn-dot" aria-hidden="true" />
+    </div>
+  );
 }
 
 export default function App() {
@@ -296,16 +327,20 @@ export default function App() {
           </div>}
 
           <div className="players">
-            <div className={`player-card ${game.turn === "w" && !terminal ? "active" : ""}`}>
-              <span className="player-icon" aria-hidden="true">♔</span>
-              <span><strong>WHITE</strong><small>{whiteName}</small></span>
-              <span className="turn-dot" aria-hidden="true" />
-            </div>
-            <div className={`player-card ${game.turn === "b" && !terminal ? "active" : ""}`}>
-              <span className="player-icon" aria-hidden="true">♚</span>
-              <span><strong>BLACK</strong><small>{blackName}</small></span>
-              <span className="turn-dot" aria-hidden="true" />
-            </div>
+            <PlayerCard
+              active={game.turn === "w"}
+              color="w"
+              game={game}
+              name={whiteName}
+              terminal={terminal}
+            />
+            <PlayerCard
+              active={game.turn === "b"}
+              color="b"
+              game={game}
+              name={blackName}
+              terminal={terminal}
+            />
           </div>
 
           <section className="status-card" aria-live="polite">

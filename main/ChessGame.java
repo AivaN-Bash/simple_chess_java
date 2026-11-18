@@ -70,6 +70,8 @@ public final class ChessGame {
     }
 
     private final Piece[][] board = new Piece[8][8];
+    private final List<Type> whiteCaptures = new ArrayList<>();
+    private final List<Type> blackCaptures = new ArrayList<>();
     private Color turn = Color.WHITE;
     private int enPassantRow = -1;
     private int enPassantCol = -1;
@@ -88,6 +90,8 @@ public final class ChessGame {
     }
 
     public void reset() {
+        whiteCaptures.clear();
+        blackCaptures.clear();
         for (int row = 0; row < 8; row++) {
             for (int col = 0; col < 8; col++) board[row][col] = null;
         }
@@ -124,6 +128,8 @@ public final class ChessGame {
             }
         }
         copy.turn = turn;
+        copy.whiteCaptures.addAll(whiteCaptures);
+        copy.blackCaptures.addAll(blackCaptures);
         copy.enPassantRow = enPassantRow;
         copy.enPassantCol = enPassantCol;
         copy.lastMove = lastMove;
@@ -145,6 +151,12 @@ public final class ChessGame {
 
     public Move lastMove() {
         return lastMove;
+    }
+
+    /** Returns the piece types captured by the requested side so the UI can show a capture tray. */
+    public List<Type> capturedBy(Color color) {
+        List<Type> captures = color == Color.WHITE ? whiteCaptures : blackCaptures;
+        return Collections.unmodifiableList(captures);
     }
 
     public List<Move> legalMovesFrom(int row, int col) {
@@ -189,8 +201,22 @@ public final class ChessGame {
     public boolean move(int fromRow, int fromCol, int toRow, int toCol, Type promotion) {
         Move move = new Move(fromRow, fromCol, toRow, toCol);
         if (!legalMovesFrom(fromRow, fromCol).contains(move)) return false;
+        recordCapture(move);
         applyMove(move, promotion);
         return true;
+    }
+
+    private void recordCapture(Move move) {
+        Piece moving = board[move.fromRow][move.fromCol];
+        Piece captured = board[move.toRow][move.toCol];
+        if (captured == null && moving.type == Type.PAWN && move.fromCol != move.toCol
+                && move.toRow == enPassantRow && move.toCol == enPassantCol) {
+            captured = board[move.fromRow][move.toCol];
+        }
+        if (captured != null) {
+            List<Type> captures = moving.color == Color.WHITE ? whiteCaptures : blackCaptures;
+            captures.add(captured.type);
+        }
     }
 
     /** Applies a move returned by legal move generation without generating it again. */

@@ -6,6 +6,7 @@ export const PIECE_SYMBOLS = {
 export const PIECE_NAMES = { k: "king", q: "queen", r: "rook", b: "bishop", n: "knight", p: "pawn" };
 
 const PIECE_VALUES = { k: 0, q: 900, r: 500, b: 330, n: 320, p: 100 };
+const CAPTURE_ORDER = ["q", "r", "b", "n", "p"];
 const KNIGHT_OFFSETS = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
 const BISHOP_DIRECTIONS = [[-1,-1],[-1,1],[1,-1],[1,1]];
 const ROOK_DIRECTIONS = [[-1,0],[1,0],[0,-1],[0,1]];
@@ -27,6 +28,7 @@ export class ChessGame {
     this.turn = "w";
     this.enPassant = null;
     this.lastMove = null;
+    this.capturedBy = { w: [], b: [] };
     this.legalMoveCache = null;
   }
 
@@ -36,6 +38,7 @@ export class ChessGame {
     copy.turn = this.turn;
     copy.enPassant = this.enPassant && { ...this.enPassant };
     copy.lastMove = this.lastMove && { ...this.lastMove };
+    copy.capturedBy = { w: [...this.capturedBy.w], b: [...this.capturedBy.b] };
     copy.legalMoveCache = this.legalMoveCache;
     return copy;
   }
@@ -85,6 +88,12 @@ export class ChessGame {
   apply(move, promotion) {
     this.legalMoveCache = null;
     const piece = this.board[move.fr][move.fc];
+    const captured = this.board[move.tr][move.tc]
+      || (piece.type === "p" && this.enPassant && move.tr === this.enPassant.row
+        && move.tc === this.enPassant.col && move.fc !== move.tc
+        ? this.board[move.fr][move.tc]
+        : null);
+    if (captured) this.capturedBy[piece.color].push(captured.type);
 
     if (piece.type === "p" && this.enPassant && move.tr === this.enPassant.row
         && move.tc === this.enPassant.col && move.fc !== move.tc && !this.board[move.tr][move.tc]) {
@@ -260,6 +269,19 @@ export class ChessGame {
 export function sameMove(first, second) {
   return first.fr === second.fr && first.fc === second.fc
     && first.tr === second.tr && first.tc === second.tc;
+}
+
+export function captureSummary(game, color) {
+  const enemy = game.enemy(color);
+  const captured = [...game.capturedBy[color]]
+    .sort((first, second) => CAPTURE_ORDER.indexOf(first) - CAPTURE_ORDER.indexOf(second));
+  const material = types => types.reduce((total, type) => total + PIECE_VALUES[type], 0);
+
+  return {
+    pieces: captured.map(type => PIECE_SYMBOLS[enemy + type]),
+    advantage: Math.max(0, Math.round((material(game.capturedBy[color])
+      - material(game.capturedBy[enemy])) / 100))
+  };
 }
 
 export function chooseBotMove(position, thoughtful) {

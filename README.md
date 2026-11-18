@@ -58,4 +58,4 @@ To override the default live URL, pass `-DsimpleChess.webUrl=https://your-live-s
 
 ## Gameplay
 
-Both apps support local two-player and computer matches, legal move highlights, check, checkmate, stalemate, castling, en passant, and pawn promotion. In the browser version, drag a piece to a legal square or select it and click a highlighted square. To castle, drag the king to the rook, or click the rook after selecting the king. The browser computer chooses moves off the main UI thread so its search does not freeze the board.
+Both apps support local two-player and computer matches, legal move highlights, check, checkmate, stalemate, castling, en passant, pawn promotion, and captured-piece trays with material advantage. In the browser version, drag a piece to a legal square or select it and click a highlighted square. To castle, drag the king to the rook, or click the rook after selecting the king. The browser computer chooses moves off the main UI thread so its search does not freeze the board.
