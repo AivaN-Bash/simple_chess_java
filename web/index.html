@@ -1,87 +1,15 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#131b1c">
-  <title>Simple Chess — Web</title>
-  <link rel="stylesheet" href="styles.css">
-  <script src="app.js" defer></script>
-</head>
-<body>
-  <main class="app-shell">
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">A LITTLE FRIENDLY COMPETITION</p>
-        <h1>Simple <span>Chess</span></h1>
-      </div>
-      <p class="top-note">Think ahead. Enjoy the game.</p>
-    </header>
-
-    <section class="game-layout" aria-label="Chess game">
-      <div class="board-wrap">
-        <div id="board" class="board" role="grid" aria-label="Chessboard"></div>
-      </div>
-
-      <aside class="sidebar">
-        <p class="section-label">THE MATCH</p>
-        <label class="field-label" for="opponent">OPPONENT</label>
-        <select id="opponent">
-          <option value="human">Two players</option>
-          <option value="bot">Play the computer</option>
-        </select>
-
-        <div id="bot-options" class="bot-options" hidden>
-          <label class="field-label" for="human-color">YOUR COLOR</label>
-          <select id="human-color">
-            <option value="w">White</option>
-            <option value="b">Black</option>
-          </select>
-          <label class="field-label" for="difficulty">BOT STYLE</label>
-          <select id="difficulty">
-            <option value="casual">Casual</option>
-            <option value="thoughtful">Thoughtful</option>
-          </select>
-        </div>
-
-        <div class="players">
-          <div id="white-player" class="player-card active">
-            <span class="player-icon" aria-hidden="true">&#9812;</span>
-            <span><strong>WHITE</strong><small id="white-name">Player one</small></span>
-            <span class="turn-dot" aria-hidden="true"></span>
-          </div>
-          <div id="black-player" class="player-card">
-            <span class="player-icon" aria-hidden="true">&#9818;</span>
-            <span><strong>BLACK</strong><small id="black-name">Player two</small></span>
-            <span class="turn-dot" aria-hidden="true"></span>
-          </div>
-        </div>
-
-        <section class="status-card" aria-live="polite">
-          <p class="section-label">GAME STATUS</p>
-          <p id="status" class="status">White to move</p>
-        </section>
-
-        <p class="hint-title">HOW TO PLAY</p>
-        <p class="hint">Click one of your pieces, then choose a highlighted square. The board shows only legal moves.</p>
-
-        <button id="new-game" class="new-game">New game</button>
-      </aside>
-    </section>
-    <footer>Made for two players at one board — or you and the computer.</footer>
-  </main>
-
-  <dialog id="promotion-dialog" class="promotion-dialog">
-    <form method="dialog">
-      <p class="section-label">PAWN PROMOTION</p>
-      <h2>Choose your piece</h2>
-      <div class="promotion-options">
-        <button value="q" aria-label="Queen">&#9813;</button>
-        <button value="r" aria-label="Rook">&#9814;</button>
-        <button value="b" aria-label="Bishop">&#9815;</button>
-        <button value="n" aria-label="Knight">&#9816;</button>
-      </div>
-    </form>
-  </dialog>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#131b1c" />
+    <meta name="description" content="A friendly local chess match for two players or you and the computer." />
+    <link rel="icon" type="image/svg+xml" href="/chess-icon.svg" />
+    <title>Simple Chess</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
 </html>

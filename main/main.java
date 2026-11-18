@@ -13,9 +13,10 @@ class Main {
             }
             JFrame window = new JFrame("Simple Chess");
             window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            window.setIconImage(ChessBoardPanel.createAppIcon());
             window.setContentPane(new ChessBoardPanel());
             window.pack();
-            window.setMinimumSize(new java.awt.Dimension(880, 690));
+            window.setMinimumSize(new java.awt.Dimension(680, 560));
             window.setLocationRelativeTo(null);
             window.setVisible(true);
         });

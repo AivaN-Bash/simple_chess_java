@@ -4,6 +4,23 @@ import java.util.List;
 
 /** Chess rules and game state. This class has no dependency on the user interface. */
 public final class ChessGame {
+    private static final int[][] KNIGHT_OFFSETS = {
+            {-2, -1}, {-2, 1}, {-1, -2}, {-1, 2},
+            {1, -2}, {1, 2}, {2, -1}, {2, 1}
+    };
+    private static final int[][] BISHOP_DIRECTIONS = {
+            {-1, -1}, {-1, 1}, {1, -1}, {1, 1}
+    };
+    private static final int[][] ROOK_DIRECTIONS = {
+            {-1, 0}, {1, 0}, {0, -1}, {0, 1}
+    };
+    private static final int[][] QUEEN_DIRECTIONS = {
+            {-1, -1}, {-1, 1}, {1, -1}, {1, 1},
+            {-1, 0}, {1, 0}, {0, -1}, {0, 1}
+    };
+    private static final int[] PAWN_CAPTURE_OFFSETS = {-1, 1};
+    private static final int[] ROOK_HOME_COLUMNS = {0, 7};
+
     public enum Color {
         WHITE, BLACK;
 
@@ -57,9 +74,17 @@ public final class ChessGame {
     private int enPassantRow = -1;
     private int enPassantCol = -1;
     private Move lastMove;
+    private int whiteKingRow;
+    private int whiteKingCol;
+    private int blackKingRow;
+    private int blackKingCol;
 
     public ChessGame() {
-        reset();
+        this(true);
+    }
+
+    private ChessGame(boolean initialize) {
+        if (initialize) reset();
     }
 
     public void reset() {
@@ -77,11 +102,15 @@ public final class ChessGame {
         turn = Color.WHITE;
         enPassantRow = enPassantCol = -1;
         lastMove = null;
+        whiteKingRow = 7;
+        whiteKingCol = 4;
+        blackKingRow = 0;
+        blackKingCol = 4;
     }
 
     /** Creates an independent snapshot for bot search without changing the live game. */
     public ChessGame copy() {
-        ChessGame copy = new ChessGame();
+        ChessGame copy = new ChessGame(false);
         for (int row = 0; row < 8; row++) {
             for (int col = 0; col < 8; col++) {
                 Piece piece = board[row][col];
@@ -98,6 +127,10 @@ public final class ChessGame {
         copy.enPassantRow = enPassantRow;
         copy.enPassantCol = enPassantCol;
         copy.lastMove = lastMove;
+        copy.whiteKingRow = whiteKingRow;
+        copy.whiteKingCol = whiteKingCol;
+        copy.blackKingRow = blackKingRow;
+        copy.blackKingCol = blackKingCol;
         return copy;
     }
 
@@ -126,27 +159,50 @@ public final class ChessGame {
     }
 
     public boolean isInCheck(Color color) {
-        int[] king = findKing(color);
-        return king == null || isSquareAttacked(king[0], king[1], color.opposite());
+        int row = color == Color.WHITE ? whiteKingRow : blackKingRow;
+        int col = color == Color.WHITE ? whiteKingCol : blackKingCol;
+        return isSquareAttacked(row, col, color.opposite());
     }
 
     public boolean isCheckmate() {
-        return isInCheck(turn) && allLegalMoves().isEmpty();
+        return isInCheck(turn) && !hasLegalMoves();
     }
 
     public boolean isStalemate() {
-        return !isInCheck(turn) && allLegalMoves().isEmpty();
+        return !isInCheck(turn) && !hasLegalMoves();
     }
 
     /** Returns whether the side to move has at least one legal move. */
     public boolean hasLegalMoves() {
-        return !allLegalMoves().isEmpty();
+        for (int row = 0; row < 8; row++) {
+            for (int col = 0; col < 8; col++) {
+                Piece piece = board[row][col];
+                if (piece != null && piece.color == turn && !legalMovesFrom(row, col).isEmpty()) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /** Applies a legal move. Promotion defaults to a queen when no choice is supplied. */
     public boolean move(int fromRow, int fromCol, int toRow, int toCol, Type promotion) {
         Move move = new Move(fromRow, fromCol, toRow, toCol);
         if (!legalMovesFrom(fromRow, fromCol).contains(move)) return false;
+        applyMove(move, promotion);
+        return true;
+    }
+
+    /** Applies a move returned by legal move generation without generating it again. */
+    void applyGeneratedLegalMove(Move move) {
+        applyMove(move, Type.QUEEN);
+    }
+
+    private void applyMove(Move move, Type promotion) {
+        int fromRow = move.fromRow;
+        int fromCol = move.fromCol;
+        int toRow = move.toRow;
+        int toCol = move.toCol;
         Piece moving = board[fromRow][fromCol];
         Piece captured = board[toRow][toCol];
 
@@ -170,6 +226,7 @@ public final class ChessGame {
         }
 
         moving.moved = true;
+        if (moving.type == Type.KING) setKingPosition(moving.color, toRow, toCol);
         if (moving.type == Type.PAWN && (toRow == 0 || toRow == 7)) {
             Type chosen = promotion == null ? Type.QUEEN : promotion;
             if (chosen == Type.PAWN || chosen == Type.KING) chosen = Type.QUEEN;
@@ -183,19 +240,6 @@ public final class ChessGame {
         }
         lastMove = move;
         turn = turn.opposite();
-        return true;
-    }
-
-    private List<Move> allLegalMoves() {
-        List<Move> moves = new ArrayList<>();
-        for (int row = 0; row < 8; row++) {
-            for (int col = 0; col < 8; col++) {
-                if (board[row][col] != null && board[row][col].color == turn) {
-                    moves.addAll(legalMovesFrom(row, col));
-                }
-            }
-        }
-        return moves;
     }
 
     private List<Move> pseudoMoves(int row, int col) {
@@ -204,12 +248,13 @@ public final class ChessGame {
         switch (piece.type) {
             case PAWN: addPawnMoves(moves, row, col, piece); break;
             case KNIGHT:
-                int[][] jumps = {{-2,-1},{-2,1},{-1,-2},{-1,2},{1,-2},{1,2},{2,-1},{2,1}};
-                for (int[] jump : jumps) addIfAvailable(moves, row, col, row + jump[0], col + jump[1], piece.color);
+                for (int[] jump : KNIGHT_OFFSETS) {
+                    addIfAvailable(moves, row, col, row + jump[0], col + jump[1], piece.color);
+                }
                 break;
-            case BISHOP: addSlidingMoves(moves, row, col, piece.color, new int[][]{{-1,-1},{-1,1},{1,-1},{1,1}}); break;
-            case ROOK: addSlidingMoves(moves, row, col, piece.color, new int[][]{{-1,0},{1,0},{0,-1},{0,1}}); break;
-            case QUEEN: addSlidingMoves(moves, row, col, piece.color, new int[][]{{-1,-1},{-1,1},{1,-1},{1,1},{-1,0},{1,0},{0,-1},{0,1}}); break;
+            case BISHOP: addSlidingMoves(moves, row, col, piece.color, BISHOP_DIRECTIONS); break;
+            case ROOK: addSlidingMoves(moves, row, col, piece.color, ROOK_DIRECTIONS); break;
+            case QUEEN: addSlidingMoves(moves, row, col, piece.color, QUEEN_DIRECTIONS); break;
             case KING:
                 for (int dr = -1; dr <= 1; dr++) {
                     for (int dc = -1; dc <= 1; dc++) {
@@ -233,7 +278,7 @@ public final class ChessGame {
                 moves.add(new Move(row, col, row + 2 * direction, col));
             }
         }
-        for (int dc : new int[]{-1, 1}) {
+        for (int dc : PAWN_CAPTURE_OFFSETS) {
             int targetCol = col + dc;
             if (!inside(nextRow, targetCol)) continue;
             Piece target = board[nextRow][targetCol];
@@ -276,7 +321,7 @@ public final class ChessGame {
 
     private void addCastlingMoves(List<Move> moves, int row, int col, Piece king) {
         if (king.moved || isSquareAttacked(row, col, king.color.opposite())) return;
-        for (int rookCol : new int[]{0, 7}) {
+        for (int rookCol : ROOK_HOME_COLUMNS) {
             Piece rook = board[row][rookCol];
             if (rook == null || rook.type != Type.ROOK || rook.color != king.color || rook.moved) continue;
             int step = rookCol < col ? -1 : 1;
@@ -307,6 +352,7 @@ public final class ChessGame {
         }
         board[move.fromRow][move.fromCol] = null;
         board[move.toRow][move.toCol] = moving;
+        if (moving.type == Type.KING) setKingPosition(moving.color, move.toRow, move.toCol);
         int rookFrom = -1, rookTo = -1;
         if (moving.type == Type.KING && Math.abs(move.toCol - move.fromCol) == 2) {
             rookFrom = move.toCol > move.fromCol ? 7 : 0;
@@ -322,18 +368,18 @@ public final class ChessGame {
         board[move.fromRow][move.fromCol] = moving;
         board[move.toRow][move.toCol] = epRow >= 0 ? null : captured;
         if (epRow >= 0) board[epRow][epCol] = captured;
+        if (moving.type == Type.KING) setKingPosition(moving.color, move.fromRow, move.fromCol);
         return inCheck;
     }
 
     private boolean isSquareAttacked(int row, int col, Color byColor) {
         int pawnDirection = byColor == Color.WHITE ? -1 : 1;
         int pawnRow = row - pawnDirection;
-        for (int dc : new int[]{-1, 1}) {
+        for (int dc : PAWN_CAPTURE_OFFSETS) {
             int pawnCol = col + dc;
             if (inside(pawnRow, pawnCol) && isPiece(pawnRow, pawnCol, byColor, Type.PAWN)) return true;
         }
-        int[][] jumps = {{-2,-1},{-2,1},{-1,-2},{-1,2},{1,-2},{1,2},{2,-1},{2,1}};
-        for (int[] jump : jumps) {
+        for (int[] jump : KNIGHT_OFFSETS) {
             if (isPiece(row + jump[0], col + jump[1], byColor, Type.KNIGHT)) return true;
         }
         for (int dr = -1; dr <= 1; dr++) {
@@ -341,8 +387,8 @@ public final class ChessGame {
                 if ((dr != 0 || dc != 0) && isPiece(row + dr, col + dc, byColor, Type.KING)) return true;
             }
         }
-        return rayAttacked(row, col, byColor, new int[][]{{-1,-1},{-1,1},{1,-1},{1,1}}, Type.BISHOP)
-                || rayAttacked(row, col, byColor, new int[][]{{-1,0},{1,0},{0,-1},{0,1}}, Type.ROOK);
+        return rayAttacked(row, col, byColor, BISHOP_DIRECTIONS, Type.BISHOP)
+                || rayAttacked(row, col, byColor, ROOK_DIRECTIONS, Type.ROOK);
     }
 
     private boolean rayAttacked(int row, int col, Color color, int[][] directions, Type slider) {
@@ -366,13 +412,14 @@ public final class ChessGame {
                 && board[row][col].color == color && board[row][col].type == type;
     }
 
-    private int[] findKing(Color color) {
-        for (int row = 0; row < 8; row++) {
-            for (int col = 0; col < 8; col++) {
-                if (isPiece(row, col, color, Type.KING)) return new int[]{row, col};
-            }
+    private void setKingPosition(Color color, int row, int col) {
+        if (color == Color.WHITE) {
+            whiteKingRow = row;
+            whiteKingCol = col;
+        } else {
+            blackKingRow = row;
+            blackKingCol = col;
         }
-        return null;
     }
 
     private boolean inside(int row, int col) {

@@ -19,7 +19,7 @@ public final class ChessBot {
         for (ChessGame.Move move : moves) {
             if (Thread.currentThread().isInterrupted()) break;
             ChessGame next = game.copy();
-            next.move(move.fromRow, move.fromCol, move.toRow, move.toCol, ChessGame.Type.QUEEN);
+            next.applyGeneratedLegalMove(move);
             int score = search(next, 1, Integer.MIN_VALUE, Integer.MAX_VALUE, botColor);
             if (score > bestScore || (score == bestScore && RANDOM.nextBoolean())) {
                 bestScore = score;
@@ -48,7 +48,7 @@ public final class ChessBot {
         for (ChessGame.Move move : moves) {
             if (Thread.currentThread().isInterrupted()) break;
             ChessGame next = game.copy();
-            next.move(move.fromRow, move.fromCol, move.toRow, move.toCol, ChessGame.Type.QUEEN);
+            next.applyGeneratedLegalMove(move);
             int score = search(next, depth - 1, alpha, beta, botColor);
             if (maximizing) {
                 best = Math.max(best, score);

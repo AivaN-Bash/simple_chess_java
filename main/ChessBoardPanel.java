@@ -1,6 +1,7 @@
 import java.awt.BasicStroke;
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.FontMetrics;
@@ -8,9 +9,14 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
+import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -19,12 +25,23 @@ import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 import javax.swing.SwingWorker;
 import javax.swing.SwingConstants;
 import javax.swing.Timer;
+import javax.swing.plaf.basic.BasicComboBoxUI;
 
 /** A themed chess UI that presents and controls the separate ChessGame rules engine. */
 public final class ChessBoardPanel extends JPanel {
+    private static final String UI_FONT_FAMILY = "Segoe UI";
+    private static final Font FONT_OVERLINE = new Font(UI_FONT_FAMILY, Font.BOLD, 10);
+    private static final Font FONT_LABEL = new Font(UI_FONT_FAMILY, Font.BOLD, 11);
+    private static final Font FONT_FIELD = new Font(UI_FONT_FAMILY, Font.PLAIN, 12);
+    private static final Font FONT_BODY = new Font(UI_FONT_FAMILY, Font.PLAIN, 13);
+    private static final Font FONT_BRAND = new Font("Segoe UI Black", Font.BOLD, 22);
+    private static final Font FONT_BUTTON = new Font(UI_FONT_FAMILY, Font.BOLD, 13);
+    private static final Font FONT_STATUS = new Font(UI_FONT_FAMILY, Font.BOLD, 16);
+    private static final Font FONT_COORDINATE = new Font(UI_FONT_FAMILY, Font.BOLD, 10);
     private static final Color BACKGROUND = new Color(19, 27, 28);
     private static final Color SURFACE = new Color(31, 41, 41);
     private static final Color SURFACE_ACTIVE = new Color(41, 54, 51);
@@ -34,20 +51,38 @@ public final class ChessBoardPanel extends JPanel {
     private static final Color SQUARE_LIGHT = new Color(231, 222, 196);
     private static final Color SQUARE_DARK = new Color(77, 112, 99);
     private static final Color MOVE_MARK = new Color(203, 183, 107, 165);
+    private static final Color BOARD_SHADOW = new Color(0, 0, 0, 70);
+    private static final Color SELECTION_OVERLAY = new Color(221, 177, 86, 135);
+    private static final Color CHECK_OVERLAY = new Color(195, 71, 61, 120);
+    private static final Color MOVE_DOT = new Color(24, 39, 34, 88);
+    private static final Color CAPTURE_RING = new Color(230, 203, 123, 210);
+    private static final Color PIECE_SHADOW = new Color(0, 0, 0, 70);
+    private static final Color WHITE_PIECE = new Color(255, 252, 239);
+    private static final Color BLACK_PIECE = new Color(29, 37, 35);
     private static final int ANIMATION_MS = 210;
+    private static final String LOCAL_WEB_URL = "http://localhost:5173";
 
     private final ChessGame game = new ChessGame();
     private final BoardCanvas board = new BoardCanvas();
+    private final JPanel contentHost = new JPanel(new BorderLayout());
+    private final JPanel content = new JPanel();
+    private final JPanel boardFrame = new JPanel(new BorderLayout());
+    private JPanel sidebar;
+    private JScrollPane responsiveScrollPane;
+    private boolean stackedLayout;
     private final JLabel whiteCard = new JLabel();
     private final JLabel blackCard = new JLabel();
     private final JLabel status = new JLabel("White to move");
+    private final JLabel instructions = new JLabel();
     private final JButton motionButton = new ThemedButton("Motion: On");
-    private final JComboBox<String> opponentChoice = new JComboBox<>(new String[]{"Two players", "Play the computer"});
-    private final JComboBox<String> colorChoice = new JComboBox<>(new String[]{"I play White", "I play Black"});
-    private final JComboBox<String> difficultyChoice = new JComboBox<>(new String[]{"Casual", "Thoughtful"});
+    private final JButton webButton = new ThemedButton("Open web version");
+    private final JComboBox<String> opponentChoice = new ThemedComboBox(new String[]{"Two players", "Play the computer"});
+    private final JComboBox<String> colorChoice = new ThemedComboBox(new String[]{"I play White", "I play Black"});
+    private final JComboBox<String> difficultyChoice = new ThemedComboBox(new String[]{"Casual", "Thoughtful"});
     private int selectedRow = -1;
     private int selectedCol = -1;
     private List<ChessGame.Move> selectedMoves = new ArrayList<>();
+    private final boolean[][] legalDestinations = new boolean[8][8];
     private boolean motionEnabled = true;
     private long animationStarted;
     private Point animationFrom;
@@ -73,32 +108,154 @@ public final class ChessBoardPanel extends JPanel {
 
         JPanel header = new JPanel(new BorderLayout());
         header.setOpaque(false);
-        JLabel brand = new JLabel("SIMPLE CHESS");
-        brand.setFont(new Font("SansSerif", Font.BOLD, 13));
-        brand.setForeground(ACCENT);
+        JLabel brand = new JLabel("SIMPLE");
+        brand.setFont(FONT_BRAND);
+        brand.setForeground(TEXT);
+        JLabel chessWord = new JLabel("CHESS");
+        chessWord.setFont(FONT_BRAND);
+        chessWord.setForeground(ACCENT);
+        JPanel wordmark = new JPanel();
+        wordmark.setLayout(new BoxLayout(wordmark, BoxLayout.X_AXIS));
+        wordmark.setOpaque(false);
+        wordmark.add(brand);
+        wordmark.add(Box.createHorizontalStrut(7));
+        wordmark.add(chessWord);
         JLabel tagline = new JLabel("A quiet match, one move at a time");
-        tagline.setFont(new Font("SansSerif", Font.PLAIN, 13));
+        tagline.setFont(FONT_BODY);
         tagline.setForeground(MUTED);
         JPanel title = new JPanel();
         title.setLayout(new BoxLayout(title, BoxLayout.Y_AXIS));
         title.setOpaque(false);
-        title.add(brand);
-        title.add(Box.createVerticalStrut(5));
+        title.add(wordmark);
+        title.add(Box.createVerticalStrut(3));
         title.add(tagline);
-        header.add(title, BorderLayout.WEST);
+        JPanel identity = new JPanel();
+        identity.setLayout(new BoxLayout(identity, BoxLayout.X_AXIS));
+        identity.setOpaque(false);
+        identity.add(new BrandMark());
+        identity.add(Box.createHorizontalStrut(13));
+        identity.add(title);
+        header.add(identity, BorderLayout.WEST);
         header.setBorder(BorderFactory.createEmptyBorder(0, 2, 18, 0));
 
-        JPanel content = new JPanel(new BorderLayout(24, 0));
+        content.setLayout(new BorderLayout(24, 0));
         content.setOpaque(false);
-        JPanel boardFrame = new JPanel(new BorderLayout());
         boardFrame.setOpaque(false);
         boardFrame.add(board, BorderLayout.CENTER);
         content.add(boardFrame, BorderLayout.CENTER);
-        content.add(buildSidebar(), BorderLayout.EAST);
+        sidebar = buildSidebar();
+        content.add(sidebar, BorderLayout.EAST);
 
         add(header, BorderLayout.NORTH);
-        add(content, BorderLayout.CENTER);
+        contentHost.setOpaque(false);
+        contentHost.add(content, BorderLayout.CENTER);
+        add(contentHost, BorderLayout.CENTER);
+        addComponentListener(new ComponentAdapter() {
+            @Override public void componentResized(ComponentEvent event) { updateResponsiveLayout(); }
+        });
         refresh();
+    }
+
+    private void updateResponsiveLayout() {
+        boolean useStackedLayout = getWidth() < 920 || getHeight() < 650;
+        resizeBoardForCurrentWidth(useStackedLayout);
+        if (useStackedLayout == stackedLayout) return;
+
+        stackedLayout = useStackedLayout;
+        content.removeAll();
+        if (stackedLayout) {
+            content.setLayout(new BorderLayout(0, 16));
+            content.add(boardFrame, BorderLayout.CENTER);
+            content.add(sidebar, BorderLayout.SOUTH);
+            if (responsiveScrollPane == null) {
+                responsiveScrollPane = new JScrollPane();
+                responsiveScrollPane.setBorder(BorderFactory.createEmptyBorder());
+                responsiveScrollPane.setOpaque(false);
+                responsiveScrollPane.getViewport().setOpaque(false);
+                responsiveScrollPane.getViewport().setBackground(BACKGROUND);
+                responsiveScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+                responsiveScrollPane.getVerticalScrollBar().setUnitIncrement(24);
+            }
+            responsiveScrollPane.setViewportView(content);
+            contentHost.removeAll();
+            contentHost.add(responsiveScrollPane, BorderLayout.CENTER);
+        } else {
+            content.setLayout(new BorderLayout(24, 0));
+            content.add(boardFrame, BorderLayout.CENTER);
+            content.add(sidebar, BorderLayout.EAST);
+            responsiveScrollPane.setViewportView(null);
+            contentHost.removeAll();
+            contentHost.add(content, BorderLayout.CENTER);
+        }
+        contentHost.revalidate();
+        contentHost.repaint();
+    }
+
+    private void resizeBoardForCurrentWidth(boolean useStackedLayout) {
+        int preferredExtent = 660;
+        if (useStackedLayout) {
+            int availableWidth = getWidth() - getInsets().left - getInsets().right - 32;
+            int availableHeight = getHeight() - 220;
+            preferredExtent = Math.max(320, Math.min(660, Math.min(availableWidth, availableHeight)));
+        }
+        Dimension currentSize = board.getPreferredSize();
+        if (currentSize.width == preferredExtent && currentSize.height == preferredExtent) return;
+        board.setPreferredSize(new Dimension(preferredExtent, preferredExtent));
+        board.revalidate();
+    }
+
+    /** Creates the matching image used by the desktop window and taskbar. */
+    public static BufferedImage createAppIcon() {
+        int size = 64;
+        BufferedImage image = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = image.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setColor(BACKGROUND);
+        g.fillRoundRect(1, 1, size - 2, size - 2, 16, 16);
+        g.setColor(new Color(ACCENT.getRed(), ACCENT.getGreen(), ACCENT.getBlue(), 190));
+        g.setStroke(new BasicStroke(2f));
+        g.drawRoundRect(2, 2, size - 5, size - 5, 15, 15);
+        g.setFont(new Font("Serif", Font.PLAIN, 48));
+        FontMetrics metrics = g.getFontMetrics();
+        String knight = "\u2658";
+        int x = (size - metrics.stringWidth(knight)) / 2;
+        int y = (size - metrics.getHeight()) / 2 + metrics.getAscent() - 2;
+        g.setColor(BOARD_SHADOW);
+        g.drawString(knight, x + 1, y + 2);
+        g.setColor(TEXT);
+        g.drawString(knight, x, y);
+        g.dispose();
+        return image;
+    }
+
+    private static final class BrandMark extends JPanel {
+        BrandMark() {
+            setOpaque(false);
+            setPreferredSize(new Dimension(48, 48));
+            setMinimumSize(new Dimension(48, 48));
+            setMaximumSize(new Dimension(48, 48));
+            getAccessibleContext().setAccessibleName("Simple Chess icon");
+        }
+
+        @Override protected void paintComponent(Graphics graphics) {
+            Graphics2D g = (Graphics2D) graphics.create();
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g.setColor(SURFACE_ACTIVE);
+            g.fillRoundRect(1, 1, getWidth() - 3, getHeight() - 3, 13, 13);
+            g.setColor(new Color(ACCENT.getRed(), ACCENT.getGreen(), ACCENT.getBlue(), 150));
+            g.setStroke(new BasicStroke(1.3f));
+            g.drawRoundRect(1, 1, getWidth() - 3, getHeight() - 3, 13, 13);
+            g.setFont(new Font("Serif", Font.PLAIN, 38));
+            FontMetrics metrics = g.getFontMetrics();
+            String knight = "\u2658";
+            int x = (getWidth() - metrics.stringWidth(knight)) / 2;
+            int y = (getHeight() - metrics.getHeight()) / 2 + metrics.getAscent() - 2;
+            g.setColor(PIECE_SHADOW);
+            g.drawString(knight, x + 1, y + 1);
+            g.setColor(TEXT);
+            g.drawString(knight, x, y);
+            g.dispose();
+        }
     }
 
     private JPanel buildSidebar() {
@@ -108,7 +265,7 @@ public final class ChessBoardPanel extends JPanel {
         side.setLayout(new BoxLayout(side, BoxLayout.Y_AXIS));
 
         JLabel gameLabel = new JLabel("THE MATCH");
-        gameLabel.setFont(new Font("SansSerif", Font.BOLD, 11));
+        gameLabel.setFont(FONT_LABEL);
         gameLabel.setForeground(MUTED);
         gameLabel.setAlignmentX(LEFT_ALIGNMENT);
         side.add(Box.createVerticalStrut(5));
@@ -139,9 +296,9 @@ public final class ChessBoardPanel extends JPanel {
         statusBox.setAlignmentX(LEFT_ALIGNMENT);
         statusBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, 100));
         JLabel statusLabel = new JLabel("GAME STATUS");
-        statusLabel.setFont(new Font("SansSerif", Font.BOLD, 10));
+        statusLabel.setFont(FONT_OVERLINE);
         statusLabel.setForeground(MUTED);
-        status.setFont(new Font("SansSerif", Font.BOLD, 16));
+        status.setFont(FONT_STATUS);
         status.setForeground(TEXT);
         statusBox.add(statusLabel);
         statusBox.add(Box.createVerticalStrut(7));
@@ -150,15 +307,15 @@ public final class ChessBoardPanel extends JPanel {
         side.add(Box.createVerticalStrut(22));
 
         JLabel howTo = new JLabel("YOUR TURN");
-        howTo.setFont(new Font("SansSerif", Font.BOLD, 11));
+        howTo.setFont(FONT_LABEL);
         howTo.setForeground(ACCENT);
         howTo.setAlignmentX(LEFT_ALIGNMENT);
         side.add(howTo);
         side.add(Box.createVerticalStrut(9));
-        JLabel instructions = new JLabel("<html><div style='width:205px; line-height:1.55'>"
-                + "Drag a piece to a highlighted square, or select it and click a destination."
+        instructions.setText("<html><div style='width:205px; line-height:1.55'>"
+                + "Select a piece and choose a highlighted square. To castle, select your king, then click the rook."
                 + "</div></html>");
-        instructions.setFont(new Font("SansSerif", Font.PLAIN, 13));
+        instructions.setFont(FONT_BODY);
         instructions.setForeground(MUTED);
         instructions.setAlignmentX(LEFT_ALIGNMENT);
         side.add(instructions);
@@ -169,6 +326,11 @@ public final class ChessBoardPanel extends JPanel {
         newGame.setAlignmentX(LEFT_ALIGNMENT);
         newGame.addActionListener(event -> startNewGame());
         side.add(newGame);
+        side.add(Box.createVerticalStrut(9));
+        styleButton(webButton, false);
+        webButton.setAlignmentX(LEFT_ALIGNMENT);
+        webButton.addActionListener(event -> openWebVersion());
+        side.add(webButton);
         side.add(Box.createVerticalStrut(9));
         styleButton(motionButton, false);
         motionButton.setAlignmentX(LEFT_ALIGNMENT);
@@ -181,15 +343,39 @@ public final class ChessBoardPanel extends JPanel {
         return side;
     }
 
+    private void openWebVersion() {
+        String url = System.getProperty("simpleChess.webUrl");
+        if (url == null || url.trim().isEmpty()) url = System.getenv("SIMPLE_CHESS_WEB_URL");
+        if (url == null || url.trim().isEmpty()) url = LOCAL_WEB_URL;
+
+        try {
+            URI address = URI.create(url.trim());
+            String scheme = address.getScheme();
+            if (scheme == null || !(scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https"))) {
+                throw new IllegalArgumentException("The web URL must begin with http:// or https://.");
+            }
+            if (!Desktop.isDesktopSupported() || !Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+                throw new UnsupportedOperationException("This computer does not provide a browser launcher.");
+            }
+            Desktop.getDesktop().browse(address);
+        } catch (Exception error) {
+            javax.swing.JOptionPane.showMessageDialog(this,
+                    "Could not open the web version. Check your browser and web URL setting.\n\n" + error.getMessage(),
+                    "Web version", javax.swing.JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
     private void addChoice(JPanel parent, String title, JComboBox<String> choice) {
         JLabel label = new JLabel(title);
-        label.setFont(new Font("SansSerif", Font.BOLD, 10));
+        label.setFont(FONT_OVERLINE);
         label.setForeground(MUTED);
         label.setAlignmentX(LEFT_ALIGNMENT);
-        choice.setFont(new Font("SansSerif", Font.PLAIN, 12));
-        choice.setForeground(BACKGROUND);
+        choice.setFont(FONT_FIELD);
+        choice.setForeground(TEXT);
         choice.setBackground(SURFACE);
-        choice.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
+        choice.setPreferredSize(new Dimension(220, 42));
+        choice.setMinimumSize(new Dimension(170, 42));
+        choice.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
         choice.setAlignmentX(LEFT_ALIGNMENT);
         parent.add(label);
         parent.add(Box.createVerticalStrut(5));
@@ -225,11 +411,11 @@ public final class ChessBoardPanel extends JPanel {
     }
 
     private void stylePlayerCard(JLabel card, String icon, String name, String player) {
-        card.setText("<html><div style='padding:2px 0'><span style='font-size:27px;color:#d6b168'>"
-                + icon + "</span>&nbsp;&nbsp;<b style='font-size:12px;letter-spacing:1px'>" + name
+        card.setText("<html><div style='padding:2px 0;font-family:Segoe UI,Arial,sans-serif'><span style='font-size:27px;color:#d6b168'>"
+                + icon + "</span>&nbsp;&nbsp;<b style='font-family:Segoe UI,Arial,sans-serif;font-size:12px;letter-spacing:1px'>" + name
                 + "</b><br><span style='color:#9ca79d;font-size:11px'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
                 + player + "</span></div></html>");
-        card.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        card.setFont(FONT_FIELD);
         card.setForeground(TEXT);
         card.setOpaque(true);
         card.setBackground(SURFACE);
@@ -240,7 +426,7 @@ public final class ChessBoardPanel extends JPanel {
     }
 
     private void styleButton(JButton button, boolean primary) {
-        button.setFont(new Font("SansSerif", Font.BOLD, 13));
+        button.setFont(FONT_BUTTON);
         button.setForeground(primary ? BACKGROUND : TEXT);
         button.setBackground(primary ? ACCENT : SURFACE);
         button.setOpaque(false);
@@ -273,9 +459,146 @@ public final class ChessBoardPanel extends JPanel {
         }
     }
 
+    /** Rounded selector with a matching popup and a short focus highlight animation. */
+    private static final class ThemedComboBox extends JComboBox<String> {
+        private float focusAmount;
+        private float focusTarget;
+        private float popupAmount;
+        private float popupTarget;
+        private boolean hovered;
+        private Timer focusAnimation;
+        private Timer popupAnimation;
+
+        ThemedComboBox(String[] values) {
+            super(values);
+            setFont(FONT_BODY);
+            setForeground(TEXT);
+            setBackground(SURFACE);
+            setOpaque(false);
+            setFocusable(true);
+            setBorder(BorderFactory.createEmptyBorder(0, 12, 0, 36));
+            setUI(new BasicComboBoxUI() {
+                @Override protected JButton createArrowButton() {
+                    JButton arrow = new JButton();
+                    arrow.setOpaque(false);
+                    arrow.setContentAreaFilled(false);
+                    arrow.setBorder(BorderFactory.createEmptyBorder());
+                    arrow.setFocusable(false);
+                    arrow.setPreferredSize(new Dimension(30, 30));
+                    return arrow;
+                }
+            });
+            setRenderer((list, value, index, selected, focused) -> {
+                JLabel item = new JLabel(value == null ? "" : value);
+                item.setOpaque(true);
+                item.setFont(FONT_FIELD);
+                item.setBorder(BorderFactory.createEmptyBorder(index < 0 ? 0 : 8, 12,
+                        index < 0 ? 0 : 8, 12));
+                item.setForeground(index < 0 ? TEXT : selected ? TEXT : MUTED);
+                item.setBackground(index < 0 ? SURFACE : selected ? SURFACE_ACTIVE : SURFACE);
+                return item;
+            });
+            addMouseListener(new java.awt.event.MouseAdapter() {
+                @Override public void mouseEntered(java.awt.event.MouseEvent event) { hovered = true; repaint(); }
+                @Override public void mouseExited(java.awt.event.MouseEvent event) { hovered = false; repaint(); }
+            });
+            addFocusListener(new java.awt.event.FocusAdapter() {
+                @Override public void focusGained(java.awt.event.FocusEvent event) { animateFocus(1f); }
+                @Override public void focusLost(java.awt.event.FocusEvent event) { animateFocus(0f); }
+            });
+            addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
+                @Override public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent event) { animatePopup(1f); }
+                @Override public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent event) { animatePopup(0f); }
+                @Override public void popupMenuCanceled(javax.swing.event.PopupMenuEvent event) { animatePopup(0f); }
+            });
+        }
+
+        private void animateFocus(float target) {
+            focusTarget = target;
+            if (focusAnimation != null && focusAnimation.isRunning()) focusAnimation.stop();
+            focusAnimation = new Timer(15, event -> {
+                float delta = focusTarget - focusAmount;
+                if (Math.abs(delta) < .06f) {
+                    focusAmount = focusTarget;
+                    focusAnimation.stop();
+                } else focusAmount += delta * .38f;
+                repaint();
+            });
+            focusAnimation.start();
+        }
+
+        private void animatePopup(float target) {
+            popupTarget = target;
+            if (popupAnimation != null && popupAnimation.isRunning()) popupAnimation.stop();
+            popupAnimation = new Timer(15, event -> {
+                float delta = popupTarget - popupAmount;
+                if (Math.abs(delta) < .06f) {
+                    popupAmount = popupTarget;
+                    popupAnimation.stop();
+                } else popupAmount += delta * .38f;
+                repaint();
+            });
+            popupAnimation.start();
+        }
+
+        @Override protected void paintComponent(Graphics graphics) {
+            Graphics2D g = (Graphics2D) graphics.create();
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g.setColor(hovered || popupAmount > 0 ? SURFACE_ACTIVE : SURFACE);
+            g.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 10, 10);
+            Color edge = new Color(
+                    (int) (64 + (ACCENT.getRed() - 64) * focusAmount),
+                    (int) (80 + (ACCENT.getGreen() - 80) * focusAmount),
+                    (int) (74 + (ACCENT.getBlue() - 74) * focusAmount));
+            g.setColor(edge);
+            g.setStroke(new BasicStroke(1f + focusAmount));
+            g.drawRoundRect(1, 1, getWidth() - 3, getHeight() - 3, 10, 10);
+            if (focusAmount > 0) {
+                g.setColor(new Color(ACCENT.getRed(), ACCENT.getGreen(), ACCENT.getBlue(), (int) (24 * focusAmount)));
+                g.fillRoundRect(2, 2, getWidth() - 4, getHeight() - 4, 9, 9);
+            }
+            g.setFont(getFont());
+            g.setColor(isEnabled() ? TEXT : MUTED);
+            FontMetrics metrics = g.getFontMetrics();
+            String value = String.valueOf(getSelectedItem());
+            int baseline = (getHeight() - metrics.getHeight()) / 2 + metrics.getAscent();
+            int maxTextWidth = Math.max(0, getWidth() - 54);
+            if (metrics.stringWidth(value) > maxTextWidth) {
+                while (!value.isEmpty() && metrics.stringWidth(value + "…") > maxTextWidth) {
+                    value = value.substring(0, value.length() - 1);
+                }
+                value += "…";
+            }
+            g.drawString(value, 13, baseline);
+
+            int arrowX = getWidth() - 21, arrowY = getHeight() / 2;
+            g.setColor(ACCENT);
+            g.setStroke(new BasicStroke(1.8f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            Graphics2D chevron = (Graphics2D) g.create();
+            chevron.rotate(Math.PI * popupAmount, arrowX, arrowY);
+            chevron.drawLine(arrowX - 4, arrowY - 2, arrowX, arrowY + 2);
+            chevron.drawLine(arrowX, arrowY + 2, arrowX + 4, arrowY - 2);
+            chevron.dispose();
+            g.dispose();
+        }
+    }
+
     private void clickSquare(int row, int col) {
         if (animationTimer != null || !isHumanTurn()) return;
         if (selectedRow >= 0) {
+            ChessGame.Piece selectedPiece = game.pieceAt(selectedRow, selectedCol);
+            ChessGame.Piece clickedPiece = game.pieceAt(row, col);
+            if (selectedPiece != null && selectedPiece.type == ChessGame.Type.KING
+                    && clickedPiece != null && clickedPiece.type == ChessGame.Type.ROOK
+                    && clickedPiece.color == selectedPiece.color && row == selectedRow) {
+                for (ChessGame.Move move : selectedMoves) {
+                    int rookCol = move.toCol > selectedCol ? 7 : 0;
+                    if (Math.abs(move.toCol - selectedCol) == 2 && col == rookCol) {
+                        attemptMove(selectedRow, selectedCol, move.toRow, move.toCol, true);
+                        return;
+                    }
+                }
+            }
             for (ChessGame.Move move : selectedMoves) {
                 if (move.toRow == row && move.toCol == col) {
                     int fromRow = selectedRow;
@@ -287,9 +610,8 @@ public final class ChessBoardPanel extends JPanel {
         }
         ChessGame.Piece piece = game.pieceAt(row, col);
         if (piece != null && piece.color == game.currentTurn()) {
-            selectedRow = row;
-            selectedCol = col;
-            selectedMoves = game.legalMovesFrom(row, col);
+            selectPiece(row, col);
+            updateSelectionHint();
         } else {
             clearSelection();
         }
@@ -404,6 +726,32 @@ public final class ChessBoardPanel extends JPanel {
     private void clearSelection() {
         selectedRow = selectedCol = -1;
         selectedMoves = new ArrayList<>();
+        for (boolean[] row : legalDestinations) Arrays.fill(row, false);
+        instructions.setText("<html><div style='width:205px; line-height:1.55'>"
+                + "Select a piece and choose a highlighted square. To castle, select your king, then click the rook."
+                + "</div></html>");
+    }
+
+    private void updateSelectionHint() {
+        ChessGame.Piece piece = game.pieceAt(selectedRow, selectedCol);
+        String hint = "Select a highlighted destination to move.";
+        if (piece != null && piece.type == ChessGame.Type.KING
+                && selectedMoves.stream().anyMatch(move -> Math.abs(move.toCol - selectedCol) == 2)) {
+            hint = "Castle by clicking your rook, or choose the king's highlighted square.";
+        } else if (piece != null && piece.type == ChessGame.Type.PAWN
+                && selectedMoves.stream().anyMatch(move -> move.toCol != selectedCol
+                    && game.pieceAt(move.toRow, move.toCol) == null)) {
+            hint = "En passant is available: capture the adjacent pawn on the highlighted square.";
+        }
+        instructions.setText("<html><div style='width:205px; line-height:1.55'>" + hint + "</div></html>");
+    }
+
+    private void selectPiece(int row, int col) {
+        selectedRow = row;
+        selectedCol = col;
+        selectedMoves = game.legalMovesFrom(row, col);
+        for (boolean[] destinations : legalDestinations) Arrays.fill(destinations, false);
+        for (ChessGame.Move move : selectedMoves) legalDestinations[move.toRow][move.toCol] = true;
     }
 
     private void refresh() {
@@ -445,7 +793,7 @@ public final class ChessBoardPanel extends JPanel {
     }
 
     private String playerCardText(String icon, String name, String player) {
-        return "<html><div style='padding:2px 0'><span style='font-size:27px;color:#d6b168'>"
+        return "<html><div style='padding:2px 0;font-family:Segoe UI,Arial,sans-serif'><span style='font-size:27px;color:#d6b168'>"
                 + icon + "</span>&nbsp;&nbsp;<b style='font-size:12px;letter-spacing:1px'>" + name
                 + "</b><br><span style='color:#9ca79d;font-size:11px'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
                 + player + "</span></div></html>";
@@ -543,9 +891,8 @@ public final class ChessBoardPanel extends JPanel {
 
         private void beginDragging() {
             dragging = true;
-            selectedRow = pressedRow;
-            selectedCol = pressedCol;
-            selectedMoves = game.legalMovesFrom(pressedRow, pressedCol);
+            selectPiece(pressedRow, pressedCol);
+            updateSelectionHint();
             setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.MOVE_CURSOR));
         }
 
@@ -578,7 +925,7 @@ public final class ChessBoardPanel extends JPanel {
             Graphics2D g = (Graphics2D) graphics.create();
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-            g.setColor(new Color(0, 0, 0, 70));
+            g.setColor(BOARD_SHADOW);
             g.fillRoundRect(boardX - 5, boardY - 5, boardSize + 10, boardSize + 10, 12, 12);
 
             ChessGame.Move last = game.lastMove();
@@ -595,10 +942,10 @@ public final class ChessBoardPanel extends JPanel {
                         g.fillRect(x, y, squareSize, squareSize);
                     }
                     if (row == selectedRow && col == selectedCol) {
-                        g.setColor(new Color(221, 177, 86, 135));
+                        g.setColor(SELECTION_OVERLAY);
                         g.fillRect(x, y, squareSize, squareSize);
                     }
-                    if (isLegalDestination(row, col)) drawMoveHint(g, row, col);
+                    if (legalDestinations[row][col]) drawMoveHint(g, row, col);
                     ChessGame.Piece piece = game.pieceAt(row, col);
                     boolean movingPiece = animatedPiece != null && last != null
                             && row == last.toRow && col == last.toCol;
@@ -610,12 +957,12 @@ public final class ChessBoardPanel extends JPanel {
                     if (col == 0) drawRank(g, "" + (8 - row), boardX - GUTTER, y);
                 }
             }
-                    if (currentTurnInCheck) {
+            if (currentTurnInCheck) {
                 for (int row = 0; row < 8; row++) {
                     for (int col = 0; col < 8; col++) {
                         ChessGame.Piece piece = game.pieceAt(row, col);
                         if (piece != null && piece.type == ChessGame.Type.KING && piece.color == game.currentTurn()) {
-                            g.setColor(new Color(195, 71, 61, 120));
+                            g.setColor(CHECK_OVERLAY);
                             g.fillRect(boardX + col * squareSize, boardY + row * squareSize, squareSize, squareSize);
                         }
                     }
@@ -638,14 +985,25 @@ public final class ChessBoardPanel extends JPanel {
             int x = boardX + col * squareSize;
             int y = boardY + row * squareSize;
             ChessGame.Piece target = game.pieceAt(row, col);
-            if (target == null) {
-                g.setColor(new Color(24, 39, 34, 88));
+            ChessGame.Piece selectedPiece = selectedRow < 0 ? null : game.pieceAt(selectedRow, selectedCol);
+            boolean enPassant = selectedPiece != null && selectedPiece.type == ChessGame.Type.PAWN
+                    && selectedCol != col && target == null;
+            boolean castle = selectedPiece != null && selectedPiece.type == ChessGame.Type.KING
+                    && Math.abs(selectedCol - col) == 2;
+            if (target == null && !enPassant && !castle) {
+                g.setColor(MOVE_DOT);
                 int diameter = squareSize / 4;
                 g.fillOval(x + (squareSize - diameter) / 2, y + (squareSize - diameter) / 2, diameter, diameter);
             } else {
-                g.setColor(new Color(230, 203, 123, 210));
+                g.setColor(CAPTURE_RING);
                 g.setStroke(new BasicStroke(Math.max(3, squareSize / 19f)));
-                g.drawOval(x + 4, y + 4, squareSize - 8, squareSize - 8);
+                if (castle) {
+                    int diameter = squareSize / 3;
+                    g.drawOval(x + (squareSize - diameter) / 2, y + (squareSize - diameter) / 2,
+                            diameter, diameter);
+                } else {
+                    g.drawOval(x + 4, y + 4, squareSize - 8, squareSize - 8);
+                }
             }
         }
 
@@ -660,33 +1018,26 @@ public final class ChessBoardPanel extends JPanel {
             FontMetrics metrics = g.getFontMetrics();
             int x = centerX - metrics.stringWidth(glyph) / 2;
             int y = centerY + (metrics.getAscent() - metrics.getDescent()) / 2;
-            g.setColor(new Color(0, 0, 0, 70));
+            g.setColor(PIECE_SHADOW);
             g.drawString(glyph, x + 1, y + 2);
-            g.setColor(piece.color == ChessGame.Color.WHITE ? new Color(255, 252, 239) : new Color(29, 37, 35));
+            g.setColor(piece.color == ChessGame.Color.WHITE ? WHITE_PIECE : BLACK_PIECE);
             g.drawString(glyph, x, y);
         }
 
         private void drawCoordinate(Graphics2D g, String text, int x, int y) {
-            g.setFont(new Font("SansSerif", Font.BOLD, 10));
+            g.setFont(FONT_COORDINATE);
             g.setColor(MUTED);
             FontMetrics metrics = g.getFontMetrics();
             g.drawString(text, x + (squareSize - metrics.stringWidth(text)) / 2, y + GUTTER - 7);
         }
 
         private void drawRank(Graphics2D g, String text, int x, int y) {
-            g.setFont(new Font("SansSerif", Font.BOLD, 10));
+            g.setFont(FONT_COORDINATE);
             g.setColor(MUTED);
             FontMetrics metrics = g.getFontMetrics();
             g.drawString(text, x + GUTTER - metrics.stringWidth(text) - 6,
                     y + (squareSize + metrics.getAscent() - metrics.getDescent()) / 2);
         }
-    }
-
-    private boolean isLegalDestination(int row, int col) {
-        for (ChessGame.Move move : selectedMoves) {
-            if (move.toRow == row && move.toCol == col) return true;
-        }
-        return false;
     }
 
     private String pieceSymbol(ChessGame.Piece piece) {
