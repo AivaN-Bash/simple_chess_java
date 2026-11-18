@@ -278,7 +278,7 @@ export function captureSummary(game, color) {
   const material = types => types.reduce((total, type) => total + PIECE_VALUES[type], 0);
 
   return {
-    pieces: captured.map(type => PIECE_SYMBOLS[enemy + type]),
+    pieces: captured.map(type => ({ type, color: enemy })),
     advantage: Math.max(0, Math.round((material(game.capturedBy[color])
       - material(game.capturedBy[enemy])) / 100))
   };

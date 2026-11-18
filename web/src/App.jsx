@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { captureSummary, ChessGame, PIECE_NAMES, PIECE_SYMBOLS } from "./chess.js";
+import { captureSummary, ChessGame, PIECE_NAMES } from "./chess.js";
+import PieceIcon from "./PieceIcon.jsx";
 
 function moveHint(game, selected, selectedMoves) {
   if (!selected) {
@@ -28,9 +29,7 @@ function PlayerCard({ color, active, terminal, name, game }) {
 
   return (
     <div className={`player-card ${active && !terminal ? "active" : ""}`}>
-      <span className="player-icon" aria-hidden="true">
-        {color === "w" ? PIECE_SYMBOLS.wk : PIECE_SYMBOLS.bk}
-      </span>
+      <PieceIcon className="player-icon" piece={{ type: "k", color }} />
       <span className="player-info">
         <span className="player-heading"><strong>{label}</strong><small>{name}</small></span>
         <span className="capture-tray" aria-label={`${name} captured pieces`} role="group">
@@ -38,10 +37,10 @@ function PlayerCard({ color, active, terminal, name, game }) {
             ? captures.pieces.map((piece, index) => (
               <span
                 aria-hidden="true"
-                className={`captured-piece ${color === "w" ? "captured-black" : "captured-white"}`}
-                key={`${piece}-${index}`}
+                className="captured-piece"
+                key={`${piece.color}${piece.type}-${index}`}
               >
-                {piece}
+                <PieceIcon className="captured-icon" piece={piece} />
               </span>
             ))
             : <span className="capture-empty">Captured pieces</span>}
@@ -63,6 +62,7 @@ export default function App() {
   const [difficulty, setDifficulty] = useState("casual");
   const [botThinking, setBotThinking] = useState(false);
   const [pendingPromotion, setPendingPromotion] = useState(null);
+  const [boardOrientationOverride, setBoardOrientationOverride] = useState(null);
   const versionRef = useRef(0);
   const timerRef = useRef(null);
   const botWorkerRef = useRef(null);
@@ -151,6 +151,7 @@ export default function App() {
     dragOriginRef.current = null;
     setBotThinking(false);
     setPendingPromotion(null);
+    setBoardOrientationOverride(null);
     clearSelection();
     const nextGame = new ChessGame();
     replaceGame(nextGame);
@@ -224,7 +225,9 @@ export default function App() {
     if (origin) movePieceTo(origin, row, col);
   }
 
-  const boardFlipped = isBotGame ? humanColor === "b" : game.turn === "b";
+  const boardFlipped = isBotGame
+    ? humanColor === "b"
+    : (boardOrientationOverride ?? (game.turn === "b"));
   const squares = [];
   const moveTargets = new Set(selectedMoves.map(move => `${move.tr},${move.tc}`));
   for (let displayRow = 0; displayRow < 8; displayRow++) {
@@ -260,9 +263,7 @@ export default function App() {
           type="button"
         >
           {moveTargets.has(`${row},${col}`) && <span className={piece || enPassant ? "capture-ring" : castle ? "castle-ring" : "move-dot"} />}
-          {piece && <span className={`piece ${piece.color === "w" ? "white" : "black"}`}>
-            {PIECE_SYMBOLS[piece.color + piece.type]}
-          </span>}
+          {piece && <PieceIcon piece={piece} />}
           {displayRow === 7 && <span className="coordinate file">{String.fromCharCode(97 + col)}</span>}
           {displayCol === 0 && <span className="coordinate rank">{8 - row}</span>}
         </button>
@@ -351,6 +352,14 @@ export default function App() {
           <p className="hint-title">HOW TO PLAY</p>
           <p className="hint">{moveHint(game, selected, selectedMoves)}</p>
           <button className="new-game" onClick={resetGame} type="button">New game</button>
+          {!isBotGame && <button
+            aria-pressed={boardOrientationOverride !== null}
+            className="flip-board"
+            onClick={() => setBoardOrientationOverride(!boardFlipped)}
+            type="button"
+          >
+            <span aria-hidden="true">&#8635;</span> Flip board
+          </button>}
           <a
             className="desktop-download"
             href="https://github.com/AivaN-Bash/simple_chess_java#java-desktop-app"
@@ -376,7 +385,7 @@ export default function App() {
           <div className="promotion-options">
             {[["q", "Queen"], ["r", "Rook"], ["b", "Bishop"], ["n", "Knight"]].map(([type, name]) => (
               <button key={type} type="button" aria-label={name} onClick={() => finishMove(pendingPromotion, type)}>
-                {PIECE_SYMBOLS[game.turn + type]}
+                <PieceIcon className="promotion-piece" piece={{ type, color: game.turn }} />
               </button>
             ))}
           </div>
