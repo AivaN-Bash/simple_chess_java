@@ -16,7 +16,7 @@ javac -d out main\ChessGame.java main\ChessBot.java main\ChessBoardPanel.java ma
 java -cp out Main
 ```
 
-The **Open web version** button opens `http://localhost:5173` by default. Start the web dev server first, or set the deployed address when launching Java:
+The **Open web version** button opens the live web app by default: https://aivan-bash.github.io/simple_chess_java/. To open a local development server instead, set the URL when launching Java:
 
 ```powershell
 java -DsimpleChess.webUrl=https://your-site.vercel.app -cp out Main
@@ -54,7 +54,7 @@ The workflow in `.github/workflows/deploy-web.yml` builds and publishes the web 
 
 Import this repository in Vercel and set the project root to `web`. Vercel detects Vite; use `npm run build` as the build command and `dist` as the output directory.
 
-After deployment, pass the live URL to the desktop app with `-DsimpleChess.webUrl=https://your-live-site` so its button opens the deployed site.
+To override the default live URL, pass `-DsimpleChess.webUrl=https://your-live-site` when launching the desktop app. For local development, use `-DsimpleChess.webUrl=http://localhost:5173`.
 
 ## Gameplay
 

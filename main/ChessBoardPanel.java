@@ -60,7 +60,7 @@ public final class ChessBoardPanel extends JPanel {
     private static final Color WHITE_PIECE = new Color(255, 252, 239);
     private static final Color BLACK_PIECE = new Color(29, 37, 35);
     private static final int ANIMATION_MS = 210;
-    private static final String LOCAL_WEB_URL = "http://localhost:5173";
+    private static final String DEFAULT_WEB_URL = "https://aivan-bash.github.io/simple_chess_java/";
 
     private final ChessGame game = new ChessGame();
     private final BoardCanvas board = new BoardCanvas();
@@ -346,7 +346,7 @@ public final class ChessBoardPanel extends JPanel {
     private void openWebVersion() {
         String url = System.getProperty("simpleChess.webUrl");
         if (url == null || url.trim().isEmpty()) url = System.getenv("SIMPLE_CHESS_WEB_URL");
-        if (url == null || url.trim().isEmpty()) url = LOCAL_WEB_URL;
+        if (url == null || url.trim().isEmpty()) url = DEFAULT_WEB_URL;
 
         try {
             URI address = URI.create(url.trim());
